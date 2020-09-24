@@ -1,0 +1,35 @@
+node
+{
+    stage('Git checkout')
+    {        
+        git credentialsId: '5cc27b3b-18fb-430c-96ff-2a9dad7e9aaf', url: 'https://github.com/sourav-ch-tcs/bootcamp3.git'  
+    }       
+    stage('Build & Test')
+    {        
+		def mavenHome = tool name: 'maven-3', type:'maven'        
+        def mavenCMD = "${mavenHome}/bin/mvn" 
+        dir("${env.WORKSPACE}/WebAppArti")
+		{
+			sh "${mavenCMD} clean package"    
+        }   
+    }
+   stage('Build Docker Image')
+   {       
+		dir("${env.WORKSPACE}/WebAppArti")
+		{
+			sh "docker build -t souravchtcs/webappdevops:1.0.1 ."
+		}
+   }
+   stage('Push Docker Image')
+   {       
+		withCredentials([[$class: 'UsernamePasswordMultiBinding',credentialsId:'dockercred',usernameVariable:'USERNAME', passwordVariable:'PASSWORD']])
+		{
+			sh "docker login -u ${USERNAME} -p ${PASSWORD}"
+			sh "docker push souravchtcs/webappdevops:1.0.1"
+		}
+   }
+   stage('Run Docker Image')
+   {
+       sh "docker run -p 9095:8080 -d souravchtcs/webappdevops:1.0.1"
+   }
+}
