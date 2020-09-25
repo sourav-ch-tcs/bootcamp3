@@ -2,34 +2,51 @@ node
 {
     stage('Git checkout')
     {        
-        git credentialsId: '5cc27b3b-18fb-430c-96ff-2a9dad7e9aaf', url: 'https://github.com/sourav-ch-tcs/bootcamp3.git'  
-    }       
+        git credentialsId: 'gitcred', url: 'https://github.com/sourav-ch-tcs/bootcamp3.git' 
+    }      
     stage('Build & Test')
     {        
-		def mavenHome = tool name: 'maven-3', type:'maven'        
-        def mavenCMD = "${mavenHome}/bin/mvn" 
+        def mavenHome = tool name: 'maven-3', type:'maven'        
+        def mavenCMD = "${mavenHome}/bin/mvn"
         dir("${env.WORKSPACE}/WebAppArti")
-		{
-			sh "${mavenCMD} clean package"    
-        }   
+        {
+            sh "${mavenCMD} clean package"    
+        }  
     }
    stage('Build Docker Image')
-   {       
-		dir("${env.WORKSPACE}/WebAppArti")
-		{
-			sh "docker build -t souravchtcs/webappdevops:1.0.1 ."
-		}
+   {      
+        dir("${env.WORKSPACE}/WebAppArti")
+        {
+            sh "docker build -t souravchtcs/webappdevops:1.0.1 ."
+        }
    }
    stage('Push Docker Image')
-   {       
-		withCredentials([[$class: 'UsernamePasswordMultiBinding',credentialsId:'dockercred',usernameVariable:'USERNAME', passwordVariable:'PASSWORD']])
-		{
-			sh "docker login -u ${USERNAME} -p ${PASSWORD}"
-			sh "docker push souravchtcs/webappdevops:1.0.1"
-		}
+   {      
+        withCredentials([[$class: 'UsernamePasswordMultiBinding',credentialsId:'dockercred',usernameVariable:'USERNAME', passwordVariable:'PASSWORD']])
+        {
+            sh "docker login -u ${USERNAME} -p ${PASSWORD}"
+            sh "docker push souravchtcs/webappdevops:1.0.1"
+        }
    }
-   stage('Run Docker Image')
+   stage('Run Docker Image Local')
    {
        sh "docker run -p 9095:8080 -d souravchtcs/webappdevops:1.0.1"
+   }
+   stage ('Run Docker In EC2 Instance')
+   {
+       def remote = [:]
+        remote.name = "ec2-13-235-95-115.ap-south-1.compute.amazonaws.com"
+        remote.host = "ec2-13-235-95-115.ap-south-1.compute.amazonaws.com"
+        remote.allowAnyHosts = true
+        withCredentials([sshUserPrivateKey(credentialsId: 'ec2cred', keyFileVariable: 'identity', passphraseVariable: '', usernameVariable: 'userName')]) {
+            remote.user = userName
+            remote.identityFile = identity
+            withCredentials([[$class: 'UsernamePasswordMultiBinding',credentialsId:'dockercred',usernameVariable:'USERNAME', passwordVariable:'PASSWORD']])
+            {
+                sshCommand remote: remote, command: "docker login -u ${USERNAME} -p ${PASSWORD}"
+                sshCommand remote: remote, command: "docker pull souravchtcs/webappdevops:1.0.1"
+                sshCommand remote: remote, command: "docker run -p 9095:8080 -d souravchtcs/webappdevops:1.0.1"
+            }
+        }
    }
 }
